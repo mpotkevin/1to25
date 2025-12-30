@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1-25 每日練習挑戰 (含管理員功能)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, query, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'schulte-daily-challenge';
+
+        let user = null;
+        let nextNumber = 1;
+        let timerInterval = null;
+        let startTime = null;
+        let isGameActive = false;
+        let myScores = [];
+        let allScores = [];
+
+        const grid = document.getElementById('game-grid');
+        const timerDisplay = document.getElementById('timer');
+        const nextTargetDisplay = document.getElementById('next-target');
+        const resetBtn = document.getElementById('reset-btn');
+        const resultModal = document.getElementById('result-modal');
+        const finalTimeDisplay = document.getElementById('final-time');
+        const historyList = document.getElementById('history-list');
+        const bestTimeDisplay = document.getElementById('best-time');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const adminTableBody = document.getElementById('admin-table-body');
+
+        // --- Auth ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        onAuthStateChanged(auth, (u) => {
+            user = u;
+            if (user) {
+                userIdDisplay.textContent = `ID: ${user.uid}`;
+                loadMyScores();
+                loadAllScores();
+            }
+        });
+
+        // --- Data Handling ---
+        function loadMyScores() {
+            if (!user) return;
+            const myScoresRef = collection(db, 'artifacts', appId, 'users', user.uid, 'scores');
+            onSnapshot(myScoresRef, (snap) => {
+                myScores = snap.docs.map(d => d.data());
+                myScores.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                renderMyHistory();
+            }, (err) => console.error(err));
+        }
+
+        function loadAllScores() {
+            if (!user) return;
+            // Rule 1: Public path for admin view
+            const allScoresRef = collection(db, 'artifacts', appId, 'public', 'data', 'all_scores');
+            onSnapshot(allScoresRef, (snap) => {
+                allScores = snap.docs.map(d => d.data());
+                // Rule 2: Sort in memory
+                allScores.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                renderAdminTable();
+            }, (err) => console.error(err));
+        }
+
+        async function saveScore(time) {
+            if (!user) return;
+            const data = {
+                uid: user.uid,
+                time: parseFloat(time),
+                timestamp: serverTimestamp(),
+                dateStr: new Date().toLocaleString('zh-TW')
+            };
+            
+            try {
+                // 存個人紀錄
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'scores'), data);
+                // 存全局紀錄 (供管理員查看)
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'all_scores'), data);
+            } catch (e) { console.error(e); }
+        }
+
+        function renderMyHistory() {
+            historyList.innerHTML = '';
+            if (myScores.length > 0) {
+                const best = Math.min(...myScores.map(s => s.time));
+                bestTimeDisplay.textContent = best.toFixed(2) + 's';
+                myScores.slice(0, 5).forEach(s => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between py-1 border-b border-black/5 last:border-0 text-sm";
+                    div.innerHTML = `<span>${s.dateStr.split(' ')[0]}</span><span class="font-bold">${s.time.toFixed(2)}s</span>`;
+                    historyList.appendChild(div);
+                });
+            }
+        }
+
+        function renderAdminTable() {
+            adminTableBody.innerHTML = '';
+            allScores.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-100 hover:bg-slate-50 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-3 text-[10px] font-mono text-slate-500">${s.uid.substring(0,8)}...</td>
+                    <td class="p-3 text-xs text-slate-600">${s.dateStr}</td>
+                    <td class="p-3 text-sm font-bold text-slate-800 text-right">${s.time.toFixed(2)}s</td>
+                `;
+                adminTableBody.appendChild(tr);
+            });
+        }
+
+        // --- Export to Google Sheets (CSV) ---
+        window.copyAsCSV = () => {
+            if (allScores.length === 0) return;
+            let csv = "User ID,日期時間,成績(秒)\n";
+            allScores.forEach(s => {
+                csv += `${s.uid},${s.dateStr},${s.time}\n`;
+            });
+            
+            const textArea = document.createElement("textarea");
+            textArea.value = csv;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            const btn = document.getElementById('copy-btn');
+            const originalText = btn.innerText;
+            btn.innerText = "已複製！請至 Sheet 貼上";
+            btn.classList.replace('bg-green-600', 'bg-blue-600');
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.replace('bg-blue-600', 'bg-green-600');
+            }, 2000);
+        };
+
+        // --- Game Logic ---
+        function startGame() {
+            nextNumber = 1;
+            isGameActive = false;
+            clearInterval(timerInterval);
+            timerDisplay.textContent = '0.00s';
+            nextTargetDisplay.textContent = '1';
+            resultModal.classList.add('hidden');
+            const nums = Array.from({length: 25}, (_, i) => i + 1);
+            for (let i = nums.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [nums[i], nums[j]] = [nums[j], nums[i]];
+            }
+            grid.innerHTML = '';
+            nums.forEach(num => {
+                const btn = document.createElement('button');
+                btn.className = 'number-btn';
+                btn.textContent = num;
+                btn.onclick = () => {
+                    if (num === nextNumber) {
+                        if (nextNumber === 1) {
+                            isGameActive = true;
+                            startTime = Date.now();
+                            timerInterval = setInterval(() => {
+                                timerDisplay.textContent = ((Date.now() - startTime) / 1000).toFixed(2) + 's';
+                            }, 10);
+                        }
+                        btn.style.visibility = 'hidden';
+                        nextNumber++;
+                        if (nextNumber > 25) {
+                            clearInterval(timerInterval);
+                            const final = timerDisplay.textContent.replace('s', '');
+                            finalTimeDisplay.textContent = final + 's';
+                            saveScore(final);
+                            setTimeout(() => resultModal.classList.remove('hidden'), 300);
+                        } else {
+                            nextTargetDisplay.textContent = nextNumber;
+                        }
+                    } else if (isGameActive) {
+                        btn.classList.add('wrong');
+                        setTimeout(() => btn.classList.remove('wrong'), 200);
+                    }
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        window.onload = () => { initAuth(); startGame(); resetBtn.onclick = startGame; document.getElementById('modal-close').onclick = startGame; };
+    </script>
+    <style>
+        body { background-color: #F2D64B; touch-action: manipulation; }
+        .number-btn {
+            aspect-ratio: 1/1; background: white; border-radius: 12px; font-weight: 800; font-size: 1.5rem;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1); transition: all 0.1s;
+        }
+        .number-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.1); }
+        .number-btn.wrong { background-color: #fee2e2; animation: shake 0.2s; }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+        .card { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border-radius: 20px; padding: 1rem; box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="p-4 flex flex-col items-center">
+
+    <div class="w-full max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-black text-slate-900">1-25 每日功課</h1>
+            <div id="user-id-display" class="text-[10px] font-mono text-slate-600 bg-white/40 px-2 py-1 rounded">ID: Loading...</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-4 text-center">
+            <div class="card"><div class="text-[10px] font-bold text-slate-500 uppercase">目標</div><div id="next-target" class="text-2xl font-black text-blue-600">1</div></div>
+            <div class="card"><div class="text-[10px] font-bold text-slate-500 uppercase">時間</div><div id="timer" class="text-2xl font-black text-slate-900">0.00s</div></div>
+        </div>
+
+        <div id="game-grid" class="grid grid-cols-5 gap-2 mb-6"></div>
+
+        <button id="reset-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold mb-6 active:scale-95 shadow-lg">重新開始</button>
+
+        <!-- 個人成績 -->
+        <div class="card mb-10">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-slate-800">我的最近成績</h3>
+                <div class="text-right">
+                    <span class="text-[10px] text-slate-500 block">個人最佳</span>
+                    <span id="best-time" class="font-black text-blue-600">--.--s</span>
+                </div>
+            </div>
+            <div id="history-list"></div>
+        </div>
+
+        <!-- 管理員儀表板 (給老師/發起者看) -->
+        <div class="card bg-slate-800 text-white border-none mb-10">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold">管理員後台 (所有學生成績)</h3>
+                <button id="copy-btn" onclick="copyAsCSV()" class="text-[10px] bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-full font-bold transition-all">
+                    複製為 Sheet 格式
+                </button>
+            </div>
+            <div class="overflow-hidden rounded-xl bg-white text-slate-800">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-100 text-[10px] uppercase font-bold text-slate-500">
+                        <tr>
+                            <th class="p-3">玩家 ID</th>
+                            <th class="p-3">時間</th>
+                            <th class="p-3 text-right">成績</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-table-body">
+                        <!-- 資料動態加載 -->
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-3 text-center">※ 資料即時從雲端抓取。點擊綠色按鈕後可直接貼上 Google Sheet。</p>
+        </div>
+    </div>
+
+    <!-- 結算彈窗 -->
+    <div id="result-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-50">
+        <div class="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl">
+            <div class="text-5xl mb-4">✨</div>
+            <h2 class="text-2xl font-black mb-1">完成！</h2>
+            <p class="text-slate-500 mb-6">成績已存入雲端紀錄表</p>
+            <div id="final-time" class="text-6xl font-black text-blue-600 mb-8">0.00s</div>
+            <button id="modal-close" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-xl active:scale-95">再試一次</button>
+        </div>
+    </div>
+
+</body>
+</html>
