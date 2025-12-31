@@ -3,19 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1-25 舒爾特每日練習 (穩定增強版)</title>
+    <title>1-25 舒爾特每日練習 (GitHub 部署版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase 初始化
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "" };
+        /**
+         * 【重要：如果你要部署到 GitHub，請填寫以下資訊】
+         * 1. 到 Firebase Console 建立專案
+         * 2. 點擊「新增應用程式 (Web)」
+         * 3. 複製產生的 config 物件並貼在下方
+         */
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "你的_API_KEY",
+            authDomain: "你的_專案ID.firebaseapp.com",
+            projectId: "你的_專案ID",
+            storageBucket: "你的_專案ID.appspot.com",
+            messagingSenderId: "你的_發送者ID",
+            appId: "你的_APP_ID"
+        };
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'schulte-daily-practice';
+        
+        // 如果是在 GitHub，建議將 appId 改成一個固定的字串，例如 "my-schulte-game"
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'schulte-production-v1';
 
         let user = null;
         let nextNumber = 1;
@@ -82,7 +97,7 @@
                 allScores = snap.docs.map(d => d.data());
                 allScores.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 renderAdminTable();
-            }, (err) => { /* Ignore student permission errors */ });
+            }, (err) => { /* 忽略權限錯誤 */ });
         }
 
         async function saveScore(time) {
@@ -126,17 +141,14 @@
             });
         }
 
-        // --- 4. 隱藏後台觸發與密碼處理 ---
+        // --- 4. 隱藏後台觸發 ---
         window.handleTitleClick = () => {
             syncStatus.classList.add('opacity-0');
             setTimeout(() => syncStatus.classList.remove('opacity-0'), 100);
-
             clickCount++;
             clearTimeout(clickTimer);
-
             if (clickCount >= 5) {
                 clickCount = 0;
-                // 跳出遮罩層輸入密碼
                 passwordModal.classList.remove('hidden');
                 adminPassInput.focus();
             } else {
@@ -169,11 +181,9 @@
             const el = document.createElement('textarea');
             el.value = csv; document.body.appendChild(el); el.select();
             document.execCommand('copy'); document.body.removeChild(el);
-            // 改用小提示而非 alert
             const copyBtn = document.querySelector('button[onclick="copyAllToCSV()"]');
-            const originalText = copyBtn.innerText;
             copyBtn.innerText = "✅ 已複製";
-            setTimeout(() => copyBtn.innerText = originalText, 2000);
+            setTimeout(() => copyBtn.innerText = "複製 CSV", 2000);
         };
 
         // --- 5. 遊戲邏輯 ---
