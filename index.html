@@ -3,314 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>1-25 舒爾特每日練習 (GitHub 部署版)</title>
+    <title>舒爾特方塊 (Schulte Grid)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <style>
+        body { 
+            background-color: #F2D64B; 
+            touch-action: manipulation; 
+            -webkit-tap-highlight-color: transparent; 
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .number-btn {
+            aspect-ratio: 1/1; 
+            background: white; 
+            border-radius: 12px; 
+            font-weight: 900; 
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1); 
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            user-select: none;
+            width: 100%;
+        }
+        .number-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.1); }
+        .number-btn.wrong { background-color: #fee2e2; animation: shake 0.2s; }
+        .number-btn.updated { animation: popIn 0.3s ease-out; background-color: #f0f9ff; }
+        
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+        @keyframes popIn { 0% { transform: scale(0.8); } 100% { transform: scale(1); } }
 
-        /**
-         * 【重要：如果你要部署到 GitHub，請填寫以下資訊】
-         * 1. 到 Firebase Console 建立專案
-         * 2. 點擊「新增應用程式 (Web)」
-         * 3. 複製產生的 config 物件並貼在下方
-         */
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "你的_API_KEY",
-            authDomain: "你的_專案ID.firebaseapp.com",
-            projectId: "你的_專案ID",
-            storageBucket: "你的_專案ID.appspot.com",
-            messagingSenderId: "你的_發送者ID",
-            appId: "你的_APP_ID"
+        .card { 
+            background: rgba(255,255,255,0.9); 
+            backdrop-filter: blur(10px); 
+            border-radius: 20px; 
+            padding: 1rem; 
+            box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1); 
+        }
+
+        /* 動態調整字體大小 */
+        .grid-4 .number-btn { font-size: 2.2rem; }
+        .grid-5 .number-btn { font-size: 1.8rem; }
+        .grid-6 .number-btn { font-size: 1.4rem; }
+    </style>
+</head>
+<body class="p-4 flex flex-col items-center min-h-screen">
+
+    <div class="w-full max-w-md flex flex-col min-h-[90vh]">
+        <!-- 標題 -->
+        <header class="mb-6 px-1 text-center">
+            <h1 class="text-3xl font-black text-slate-900 italic tracking-tighter">舒爾特方塊</h1>
+            <p class="text-[10px] font-bold uppercase text-slate-600 tracking-widest mt-1">Schulte Grid Challenge</p>
+        </header>
+
+        <!-- 設定區域 -->
+        <div class="card mb-4">
+            <div class="grid grid-cols-2 gap-4">
+                <!-- 左側：網格尺寸 -->
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">網格尺寸</label>
+                    <div class="flex bg-slate-200 p-1 rounded-xl">
+                        <button onclick="updateSize(4)" id="size-4" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all">4x4</button>
+                        <button onclick="updateSize(5)" id="size-5" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all">5x5</button>
+                        <button onclick="updateSize(6)" id="size-6" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all">6x6</button>
+                    </div>
+                </div>
+                <!-- 右側：難度模式 -->
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">練習模式</label>
+                    <div class="flex bg-slate-200 p-1 rounded-xl">
+                        <button onclick="updateMode('basic')" id="mode-basic" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">基礎</button>
+                        <button onclick="updateMode('advanced')" id="mode-advanced" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">進階</button>
+                        <button onclick="updateMode('reverse')" id="mode-reverse" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">倒序</button>
+                    </div>
+                </div>
+            </div>
+            <p id="mode-info" class="text-center text-[11px] font-bold text-slate-500 mt-3 uppercase tracking-wider"></p>
+        </div>
+
+        <!-- 狀態顯示 -->
+        <div class="grid grid-cols-2 gap-3 mb-4 text-center">
+            <div class="card">
+                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">目標</div>
+                <div id="next-target" class="text-4xl font-black text-blue-600 leading-none">1</div>
+            </div>
+            <div class="card">
+                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">計時</div>
+                <div id="timer" class="text-4xl font-black text-slate-900 leading-none">0.00s</div>
+            </div>
+        </div>
+
+        <!-- 遊戲網格 -->
+        <div id="grid-container" class="mb-6">
+            <div id="game-grid" class="grid gap-2"></div>
+        </div>
+
+        <button id="reset-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold mb-8 active:scale-95 shadow-lg text-lg transition-all">
+            重新開始
+        </button>
+
+        <!-- 設計者資訊 -->
+        <footer class="mt-auto py-6 text-center">
+            <a href="https://www.facebook.com/kevin.pptgame" target="_blank" class="inline-block group transition-all duration-300">
+                <p class="text-slate-700 font-bold text-sm group-hover:text-blue-700 transition-colors">
+                    設計：職能治療師 - 鄭凱文
+                </p>
+            </a>
+        </footer>
+    </div>
+
+    <!-- 結算彈窗 -->
+    <div id="result-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-50">
+        <div class="bg-white rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl">
+            <div class="text-5xl mb-4">🏆</div>
+            <h2 class="text-2xl font-black text-slate-900 mb-2">挑戰完成！</h2>
+            <p id="result-detail" class="text-slate-500 text-sm mb-6"></p>
+            <div id="final-time" class="text-6xl font-black text-blue-600 mb-8">0.00s</div>
+            <button id="modal-close" class="w-full py-5 bg-blue-600 text-white rounded-2xl font-bold text-xl active:scale-95 shadow-xl shadow-blue-200">
+                再次挑戰
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let config = {
+            size: 5,
+            mode: 'basic' // 'basic', 'advanced', 'reverse'
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        // 如果是在 GitHub，建議將 appId 改成一個固定的字串，例如 "my-schulte-game"
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'schulte-production-v1';
-
-        let user = null;
-        let nextNumber = 1;
-        let timerInterval = null;
-        let startTime = null;
-        let isGameActive = false;
-        let myScores = [];
-        let allScores = [];
-        let clickCount = 0;
-        let clickTimer = null;
+        let state = {
+            nextNumber: 1,
+            currentMaxOnGrid: 0,
+            totalTarget: 0,
+            isGameActive: false,
+            startTime: null,
+            timerInterval: null
+        };
 
         const grid = document.getElementById('game-grid');
         const timerDisplay = document.getElementById('timer');
         const nextTargetDisplay = document.getElementById('next-target');
-        const resetBtn = document.getElementById('reset-btn');
-        const resultModal = document.getElementById('result-modal');
-        const finalTimeDisplay = document.getElementById('final-time');
-        const historyList = document.getElementById('history-list');
-        const bestTimeDisplay = document.getElementById('best-time');
-        const syncStatus = document.getElementById('sync-status');
-        const adminDashboard = document.getElementById('admin-dashboard');
-        const adminTableBody = document.getElementById('admin-table-body');
-        const passwordModal = document.getElementById('password-modal');
-        const adminPassInput = document.getElementById('admin-pass-input');
+        const modeInfo = document.getElementById('mode-info');
 
-        // --- 1. 身份驗證與初始化 ---
-        const initAuth = async () => {
-            syncStatus.textContent = "⏳ 連線中...";
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                syncStatus.textContent = "❌ 連線失敗";
-            }
-        };
+        function updateSize(s) {
+            config.size = s;
+            refreshUI();
+            initGame();
+        }
 
-        onAuthStateChanged(auth, (u) => {
-            user = u;
-            if (user) {
-                syncStatus.textContent = "✅ 已連線 (ID: " + user.uid.substring(0, 5) + ")";
-                loadMyScores();
-                loadAllScores();
-            }
-        });
+        function updateMode(m) {
+            config.mode = m;
+            refreshUI();
+            initGame();
+        }
 
-        // --- 2. Firestore 資料處理 ---
-        function loadMyScores() {
-            if (!user) return;
-            const scoresRef = collection(db, 'artifacts', appId, 'users', user.uid, 'scores');
-            onSnapshot(scoresRef, (snap) => {
-                myScores = snap.docs.map(d => d.data());
-                myScores.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                renderHistory();
+        function refreshUI() {
+            // 更新尺寸按鈕
+            [4, 5, 6].forEach(s => {
+                const btn = document.getElementById(`size-${s}`);
+                btn.className = s === config.size 
+                    ? "flex-1 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-900 shadow-sm"
+                    : "flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700";
             });
-        }
 
-        function loadAllScores() {
-            if (!user) return;
-            const allScoresRef = collection(db, 'artifacts', appId, 'public', 'data', 'all_scores');
-            onSnapshot(allScoresRef, (snap) => {
-                allScores = snap.docs.map(d => d.data());
-                allScores.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                renderAdminTable();
-            }, (err) => { /* 忽略權限錯誤 */ });
-        }
-
-        async function saveScore(time) {
-            if (!user) return;
-            const data = {
-                uid: user.uid,
-                time: parseFloat(time),
-                timestamp: serverTimestamp(),
-                dateStr: new Date().toLocaleString('zh-TW', { hour12: false })
-            };
-            try {
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'scores'), data);
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'all_scores'), data);
-            } catch (e) { console.error(e); }
-        }
-
-        // --- 3. UI 渲染 ---
-        function renderHistory() {
-            historyList.innerHTML = '';
-            if (myScores.length > 0) {
-                const times = myScores.map(s => s.time).filter(t => !isNaN(t));
-                if (times.length > 0) bestTimeDisplay.textContent = Math.min(...times).toFixed(2) + 's';
-                myScores.slice(0, 5).forEach(s => {
-                    const div = document.createElement('div');
-                    div.className = "flex justify-between py-2 border-b border-black/5 last:border-0 text-sm";
-                    div.innerHTML = `<span class="text-slate-500 text-xs">${s.dateStr ? s.dateStr.split(' ')[0] : '紀錄中'}</span><span class="font-bold text-slate-800">${s.time.toFixed(2)}s</span>`;
-                    historyList.appendChild(div);
-                });
-            } else {
-                historyList.innerHTML = '<p class="text-slate-400 text-xs text-center py-4">尚無紀錄</p>';
-            }
-        }
-
-        function renderAdminTable() {
-            adminTableBody.innerHTML = '';
-            allScores.forEach(s => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-100 text-[10px]";
-                tr.innerHTML = `<td class="p-2 font-mono">${s.uid.substring(0,8)}</td><td class="p-2">${s.dateStr}</td><td class="p-2 font-bold text-right text-blue-600">${s.time.toFixed(2)}s</td>`;
-                adminTableBody.appendChild(tr);
+            // 更新模式按鈕
+            ['basic', 'advanced', 'reverse'].forEach(m => {
+                const btn = document.getElementById(`mode-${m}`);
+                btn.className = m === config.mode
+                    ? "flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-white text-slate-900 shadow-sm"
+                    : "flex-1 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700";
             });
+
+            const n = config.size * config.size;
+            let modeName = "基礎";
+            let range = `1 - ${n}`;
+            if (config.mode === 'advanced') { modeName = "進階"; range = `1 - ${n * 2}`; }
+            if (config.mode === 'reverse') { modeName = "倒序"; range = `${n} - 1`; }
+            
+            modeInfo.textContent = `${config.size}x${config.size} ${modeName}模式 (${range})`;
         }
 
-        // --- 4. 隱藏後台觸發 ---
-        window.handleTitleClick = () => {
-            syncStatus.classList.add('opacity-0');
-            setTimeout(() => syncStatus.classList.remove('opacity-0'), 100);
-            clickCount++;
-            clearTimeout(clickTimer);
-            if (clickCount >= 5) {
-                clickCount = 0;
-                passwordModal.classList.remove('hidden');
-                adminPassInput.focus();
+        function initGame() {
+            clearInterval(state.timerInterval);
+            state.isGameActive = false;
+            const n = config.size * config.size;
+
+            if (config.mode === 'reverse') {
+                state.nextNumber = n;
+                state.totalTarget = 1;
+            } else if (config.mode === 'advanced') {
+                state.nextNumber = 1;
+                state.totalTarget = n * 2;
             } else {
-                clickTimer = setTimeout(() => { clickCount = 0; }, 3000);
+                state.nextNumber = 1;
+                state.totalTarget = n;
             }
-        };
 
-        window.submitPassword = () => {
-            if (adminPassInput.value === "8888") {
-                passwordModal.classList.add('hidden');
-                adminDashboard.classList.remove('hidden');
-                adminDashboard.scrollIntoView({ behavior: 'smooth' });
-                adminPassInput.value = "";
-            } else {
-                const errorMsg = document.getElementById('pass-error');
-                errorMsg.classList.remove('hidden');
-                setTimeout(() => errorMsg.classList.add('hidden'), 2000);
-                adminPassInput.value = "";
-            }
-        };
+            state.currentMaxOnGrid = n;
+            timerDisplay.textContent = '0.00s';
+            nextTargetDisplay.textContent = state.nextNumber;
+            document.getElementById('result-modal').classList.add('hidden');
 
-        window.closePasswordModal = () => {
-            passwordModal.classList.add('hidden');
-            adminPassInput.value = "";
-        };
-
-        window.copyAllToCSV = () => {
-            let csv = "玩家ID,日期,成績\n";
-            allScores.forEach(s => csv += `${s.uid},${s.dateStr},${s.time}\n`);
-            const el = document.createElement('textarea');
-            el.value = csv; document.body.appendChild(el); el.select();
-            document.execCommand('copy'); document.body.removeChild(el);
-            const copyBtn = document.querySelector('button[onclick="copyAllToCSV()"]');
-            copyBtn.innerText = "✅ 已複製";
-            setTimeout(() => copyBtn.innerText = "複製 CSV", 2000);
-        };
-
-        // --- 5. 遊戲邏輯 ---
-        function startGame() {
-            nextNumber = 1; isGameActive = false; clearInterval(timerInterval);
-            timerDisplay.textContent = '0.00s'; nextTargetDisplay.textContent = '1'; resultModal.classList.add('hidden');
-            const nums = Array.from({length: 25}, (_, i) => i + 1);
+            grid.style.gridTemplateColumns = `repeat(${config.size}, minmax(0, 1fr))`;
+            grid.className = `grid gap-2 grid-${config.size}`;
+            
+            const nums = Array.from({ length: n }, (_, i) => i + 1);
             for (let i = nums.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [nums[i], nums[j]] = [nums[j], nums[i]];
             }
+
             grid.innerHTML = '';
             nums.forEach(num => {
                 const btn = document.createElement('button');
                 btn.className = 'number-btn';
                 btn.textContent = num;
-                btn.onclick = () => {
-                    if (num === nextNumber) {
-                        if (nextNumber === 1) {
-                            isGameActive = true; startTime = Date.now();
-                            timerInterval = setInterval(() => {
-                                timerDisplay.textContent = ((Date.now() - startTime) / 1000).toFixed(2) + 's';
-                            }, 10);
-                        }
-                        btn.style.visibility = 'hidden';
-                        nextNumber++;
-                        if (nextNumber > 25) {
-                            clearInterval(timerInterval);
-                            const final = timerDisplay.textContent.replace('s', '');
-                            finalTimeDisplay.textContent = final + 's';
-                            saveScore(final);
-                            setTimeout(() => resultModal.classList.remove('hidden'), 200);
-                        } else { nextTargetDisplay.textContent = nextNumber; }
-                    } else if (isGameActive) {
-                        btn.classList.add('wrong');
-                        setTimeout(() => btn.classList.remove('wrong'), 200);
-                    }
-                };
+                btn.onclick = () => handleNumberClick(btn);
                 grid.appendChild(btn);
             });
         }
 
-        window.onload = () => { initAuth(); startGame(); resetBtn.onclick = startGame; document.getElementById('modal-close').onclick = startGame; };
-    </script>
-    <style>
-        body { background-color: #F2D64B; touch-action: manipulation; }
-        .number-btn {
-            aspect-ratio: 1/1; background: white; border-radius: 12px; font-weight: 800; font-size: 1.5rem;
-            box-shadow: 0 4px 0 rgba(0,0,0,0.1); transition: all 0.1s;
+        function handleNumberClick(btn) {
+            const val = parseInt(btn.textContent);
+
+            if (val === state.nextNumber) {
+                // 開始計時
+                if (!state.isGameActive) {
+                    state.isGameActive = true;
+                    state.startTime = Date.now();
+                    state.timerInterval = setInterval(() => {
+                        const elapsed = (Date.now() - state.startTime) / 1000;
+                        timerDisplay.textContent = elapsed.toFixed(2) + 's';
+                    }, 10);
+                }
+
+                if (config.mode === 'advanced' && state.currentMaxOnGrid < state.totalTarget) {
+                    state.currentMaxOnGrid++;
+                    btn.textContent = state.currentMaxOnGrid;
+                    btn.classList.remove('updated');
+                    void btn.offsetWidth;
+                    btn.classList.add('updated');
+                } else {
+                    btn.style.visibility = 'hidden';
+                    btn.style.pointerEvents = 'none';
+                }
+
+                // 更新下一個目標
+                if (config.mode === 'reverse') {
+                    if (state.nextNumber === state.totalTarget) {
+                        endGame();
+                    } else {
+                        state.nextNumber--;
+                        nextTargetDisplay.textContent = state.nextNumber;
+                    }
+                } else {
+                    if (state.nextNumber === state.totalTarget) {
+                        endGame();
+                    } else {
+                        state.nextNumber++;
+                        nextTargetDisplay.textContent = state.nextNumber;
+                    }
+                }
+            } else if (state.isGameActive) {
+                btn.classList.add('wrong');
+                setTimeout(() => btn.classList.remove('wrong'), 200);
+            }
         }
-        .number-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.1); }
-        .number-btn.wrong { background-color: #fee2e2; animation: shake 0.2s; }
-        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
-        .card { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border-radius: 20px; padding: 1.25rem; box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1); }
-    </style>
-</head>
-<body class="p-4 flex flex-col items-center min-h-screen">
 
-    <div class="w-full max-w-md">
-        <header class="flex justify-between items-end mb-4 px-1 cursor-pointer select-none" onclick="handleTitleClick()">
-            <div>
-                <h1 class="text-2xl font-black text-slate-900 leading-none">1-25 挑戰</h1>
-                <p id="sync-status" class="text-[10px] font-bold mt-1 uppercase text-slate-600 transition-opacity duration-75">⏳ 連線中...</p>
-            </div>
-            <div class="text-right">
-                <p class="text-[10px] font-bold text-slate-500 uppercase">個人最佳</p>
-                <p id="best-time" class="text-xl font-black text-blue-600 leading-none">--.--s</p>
-            </div>
-        </header>
+        function endGame() {
+            clearInterval(state.timerInterval);
+            document.getElementById('final-time').textContent = timerDisplay.textContent;
+            document.getElementById('result-detail').textContent = modeInfo.textContent;
+            setTimeout(() => document.getElementById('result-modal').classList.remove('hidden'), 300);
+        }
 
-        <div class="grid grid-cols-2 gap-3 mb-4 text-center">
-            <div class="card"><div class="text-[10px] font-bold text-slate-400 uppercase mb-1">目標</div><div id="next-target" class="text-3xl font-black text-blue-600">1</div></div>
-            <div class="card"><div class="text-[10px] font-bold text-slate-400 uppercase mb-1">用時</div><div id="timer" class="text-3xl font-black text-slate-900">0.00s</div></div>
-        </div>
+        document.getElementById('reset-btn').onclick = initGame;
+        document.getElementById('modal-close').onclick = initGame;
 
-        <div id="game-grid" class="grid grid-cols-5 gap-2 mb-6"></div>
-
-        <button id="reset-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold mb-8 active:scale-95 shadow-lg text-lg">重新開始</button>
-
-        <div class="card mb-6">
-            <h3 class="font-bold text-slate-800 mb-3 text-sm">🕒 最近 5 次成績</h3>
-            <div id="history-list" class="min-h-[60px]"></div>
-        </div>
-
-        <!-- 管理員後台 (隱藏) -->
-        <div id="admin-dashboard" class="card hidden border-2 border-slate-900 mt-4 bg-white">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="font-black text-slate-900 text-sm">管理員：全體數據</h3>
-                <button onclick="copyAllToCSV()" class="bg-green-600 text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-sm">複製 CSV</button>
-            </div>
-            <div class="max-h-60 overflow-y-auto rounded-lg bg-slate-50 border border-slate-200">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-200 text-[9px] font-bold sticky top-0">
-                        <tr>
-                            <th class="p-2">玩家 ID</th>
-                            <th class="p-2">日期</th>
-                            <th class="p-2 text-right">成績</th>
-                        </tr>
-                    </thead>
-                    <tbody id="admin-table-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- 密碼輸入模態視窗 -->
-    <div id="password-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-6 z-[60]">
-        <div class="bg-white rounded-3xl p-8 max-w-xs w-full text-center shadow-2xl">
-            <h3 class="text-xl font-bold text-slate-900 mb-4">管理員驗證</h3>
-            <input type="password" id="admin-pass-input" placeholder="輸入密碼" class="w-full p-4 border-2 border-slate-200 rounded-xl mb-4 text-center text-lg focus:border-blue-500 outline-none">
-            <p id="pass-error" class="text-red-500 text-xs mb-4 hidden">密碼錯誤，請再試一次</p>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="closePasswordModal()" class="py-3 bg-slate-100 text-slate-600 rounded-xl font-bold">取消</button>
-                <button onclick="submitPassword()" class="py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200">確認</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 遊戲結算視窗 -->
-    <div id="result-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-50">
-        <div class="bg-white rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl">
-            <div class="text-5xl mb-6">🏆</div>
-            <h2 class="text-2xl font-black text-slate-900 mb-2">功課完成！</h2>
-            <div id="final-time" class="text-6xl font-black text-blue-600 mb-10">0.00s</div>
-            <button id="modal-close" class="w-full py-5 bg-blue-600 text-white rounded-2xl font-bold text-xl active:scale-95">再來一局</button>
-        </div>
-    </div>
-
+        window.onload = () => {
+            refreshUI();
+            initGame();
+        };
+    </script>
 </body>
 </html>
