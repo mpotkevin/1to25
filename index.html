@@ -46,6 +46,10 @@
         .grid-6 .number-btn { font-size: 1.4rem; }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* 提示動畫 */
+        .pulse-hint { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
     </style>
 </head>
 <body class="p-4 flex flex-col items-center min-h-screen">
@@ -76,28 +80,40 @@
                         <button onclick="updateSize(6)" id="size-6" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition-all">6x6</button>
                     </div>
                 </div>
-                <!-- 右側：難度模式 -->
+                <!-- 右側：遊戲模式 -->
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">練習模式</label>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">遊戲模式</label>
                     <div class="flex bg-slate-200 p-1 rounded-xl">
-                        <button onclick="updateMode('basic')" id="mode-basic" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">基礎</button>
-                        <button onclick="updateMode('advanced')" id="mode-advanced" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">進階</button>
-                        <button onclick="updateMode('reverse')" id="mode-reverse" class="flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all">倒序</button>
+                        <button onclick="updateMode('basic')" id="mode-basic" class="flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all">基礎</button>
+                        <button onclick="updateMode('advanced')" id="mode-advanced" class="flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all">進階</button>
+                        <button onclick="updateMode('reverse')" id="mode-reverse" class="flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all">倒序</button>
+                        <button onclick="updateMode('infinite')" id="mode-infinite" class="flex-1 py-1.5 rounded-lg text-[9px] font-bold transition-all">無限</button>
                     </div>
                 </div>
             </div>
+            
+            <!-- 無限模式子設定 -->
+            <div id="infinite-options" class="hidden mt-3 pt-3 border-t border-black/5">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">無限模式類型</label>
+                <div class="flex bg-slate-200 p-1 rounded-xl max-w-[220px] mx-auto">
+                    <button onclick="updateInfType('stopwatch')" id="inf-stopwatch" class="flex-1 py-1 rounded-lg text-[10px] font-bold transition-all">碼表計時</button>
+                    <button onclick="updateInfType('countdown')" id="inf-countdown" class="flex-1 py-1 rounded-lg text-[10px] font-bold transition-all">倒數計時</button>
+                </div>
+            </div>
+
             <p id="mode-info" class="text-center text-[11px] font-bold text-slate-500 mt-3 uppercase tracking-wider"></p>
         </div>
 
         <!-- 狀態顯示 -->
         <div class="grid grid-cols-2 gap-3 mb-4 text-center">
             <div class="card">
-                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">目標</div>
+                <div id="target-label" class="text-[10px] font-bold text-slate-400 uppercase mb-1">目標</div>
                 <div id="next-target" class="text-4xl font-black text-blue-600 leading-none">1</div>
             </div>
-            <div class="card">
-                <div class="text-[10px] font-bold text-slate-400 uppercase mb-1">計時</div>
-                <div id="timer" class="text-4xl font-black text-slate-900 leading-none">0.00s</div>
+            <div class="card relative overflow-hidden group">
+                <div id="timer-label" class="text-[10px] font-bold text-slate-400 uppercase mb-1">計時</div>
+                <div id="timer" onclick="handleTimerClick()" class="text-4xl font-black text-slate-900 leading-none cursor-pointer hover:scale-105 transition-transform">0.00s</div>
+                <div id="timer-hint" class="hidden text-[8px] font-bold text-blue-500 uppercase mt-1 pulse-hint">點擊更改時間</div>
             </div>
         </div>
 
@@ -107,7 +123,7 @@
         </div>
 
         <button id="reset-btn" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold mb-8 active:scale-95 shadow-lg text-lg transition-all">
-            重新開始
+            重新開始遊戲
         </button>
 
         <!-- 設計者資訊 -->
@@ -120,6 +136,19 @@
         </footer>
     </div>
 
+    <!-- 自定義時間模態框 -->
+    <div id="custom-time-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-[70]">
+        <div class="bg-white rounded-[40px] p-8 max-w-sm w-full text-center shadow-2xl">
+            <h3 class="text-xl font-black text-slate-900 mb-2">設定倒數秒數</h3>
+            <p class="text-slate-400 text-xs mb-6 uppercase font-bold tracking-widest">請輸入您想挑戰的總秒數</p>
+            <input type="number" id="custom-time-input" placeholder="例如: 60" class="w-full text-center text-4xl font-black p-4 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-500 transition-colors mb-6 text-slate-900">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeCustomTimeModal()" class="py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold active:scale-95 transition-all">取消</button>
+                <button onclick="confirmCustomTime()" class="py-4 bg-blue-600 text-white rounded-2xl font-bold active:scale-95 shadow-lg shadow-blue-200 transition-all">確認</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 歷史紀錄視窗 -->
     <div id="history-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-[60]">
         <div class="bg-white rounded-[40px] p-8 max-w-sm w-full shadow-2xl flex flex-col max-h-[80vh]">
@@ -130,8 +159,9 @@
             <div id="history-content" class="overflow-y-auto no-scrollbar flex-1">
                 <!-- 紀錄內容動態插入 -->
             </div>
-            <div class="mt-6">
-                <button onclick="clearHistory()" class="text-[10px] font-bold text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors">清除所有紀錄</button>
+            <div class="mt-6 flex justify-between items-center">
+                <button onclick="clearHistory()" class="text-[10px] font-bold text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors">清除紀錄</button>
+                <p class="text-[9px] text-slate-300 font-bold uppercase">由新到舊排序</p>
             </div>
         </div>
     </div>
@@ -139,8 +169,8 @@
     <!-- 結算彈窗 -->
     <div id="result-modal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md hidden flex items-center justify-center p-6 z-50">
         <div class="bg-white rounded-[40px] p-10 max-w-sm w-full text-center shadow-2xl">
-            <div class="text-5xl mb-4">🏆</div>
-            <h2 class="text-2xl font-black text-slate-900 mb-2">挑戰完成！</h2>
+            <div id="result-emoji" class="text-5xl mb-4">🏆</div>
+            <h2 id="result-title" class="text-2xl font-black text-slate-900 mb-2">挑戰完成！</h2>
             <p id="result-detail" class="text-slate-500 text-sm mb-6"></p>
             <div id="final-time" class="text-6xl font-black text-blue-600 mb-8">0.00s</div>
             <button id="modal-close" class="w-full py-5 bg-blue-600 text-white rounded-2xl font-bold text-xl active:scale-95 shadow-xl shadow-blue-200">
@@ -152,7 +182,9 @@
     <script>
         let config = {
             size: 5,
-            mode: 'basic' // 'basic', 'advanced', 'reverse'
+            mode: 'basic', 
+            infType: 'stopwatch',
+            countdownTime: 60 
         };
 
         let state = {
@@ -161,7 +193,9 @@
             totalTarget: 0,
             isGameActive: false,
             startTime: null,
-            timerInterval: null
+            timerInterval: null,
+            infiniteCount: 0,
+            timeLeft: 60
         };
 
         const grid = document.getElementById('game-grid');
@@ -170,6 +204,12 @@
         const modeInfo = document.getElementById('mode-info');
         const historyModal = document.getElementById('history-modal');
         const historyContent = document.getElementById('history-content');
+        const infOptions = document.getElementById('infinite-options');
+        const targetLabel = document.getElementById('target-label');
+        const timerLabel = document.getElementById('timer-label');
+        const timerHint = document.getElementById('timer-hint');
+        const customTimeModal = document.getElementById('custom-time-modal');
+        const customTimeInput = document.getElementById('custom-time-input');
 
         function updateSize(s) {
             config.size = s;
@@ -183,8 +223,39 @@
             initGame();
         }
 
+        function updateInfType(t) {
+            config.infType = t;
+            refreshUI();
+            initGame();
+        }
+
+        function handleTimerClick() {
+            if (config.mode === 'infinite' && config.infType === 'countdown' && !state.isGameActive) {
+                customTimeInput.value = config.countdownTime;
+                customTimeModal.classList.remove('hidden');
+                setTimeout(() => customTimeInput.focus(), 50);
+            }
+        }
+
+        function closeCustomTimeModal() {
+            customTimeModal.classList.add('hidden');
+        }
+
+        function confirmCustomTime() {
+            const val = parseInt(customTimeInput.value);
+            if (val > 0 && val <= 3600) {
+                config.countdownTime = val;
+                state.timeLeft = val;
+                timerDisplay.textContent = state.timeLeft.toFixed(2) + 's';
+                refreshUI();
+                closeCustomTimeModal();
+            } else {
+                customTimeInput.classList.add('border-red-500');
+                setTimeout(() => customTimeInput.classList.remove('border-red-500'), 1000);
+            }
+        }
+
         function refreshUI() {
-            // 更新尺寸按鈕
             [4, 5, 6].forEach(s => {
                 const btn = document.getElementById(`size-${s}`);
                 btn.className = s === config.size 
@@ -192,42 +263,83 @@
                     : "flex-1 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700";
             });
 
-            // 更新模式按鈕
-            ['basic', 'advanced', 'reverse'].forEach(m => {
+            ['basic', 'advanced', 'reverse', 'infinite'].forEach(m => {
                 const btn = document.getElementById(`mode-${m}`);
                 btn.className = m === config.mode
-                    ? "flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-white text-slate-900 shadow-sm"
-                    : "flex-1 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-slate-700";
+                    ? "flex-1 py-1.5 rounded-lg text-[9px] font-bold bg-white text-slate-900 shadow-sm"
+                    : "flex-1 py-1.5 rounded-lg text-[9px] font-bold text-slate-500 hover:text-slate-700";
             });
+
+            if (config.mode === 'infinite') {
+                infOptions.classList.remove('hidden');
+                ['stopwatch', 'countdown'].forEach(t => {
+                    const btn = document.getElementById(`inf-${t}`);
+                    btn.className = t === config.infType
+                        ? "flex-1 py-1 rounded-lg text-[10px] font-bold bg-white text-slate-900 shadow-sm"
+                        : "flex-1 py-1 rounded-lg text-[10px] font-bold text-slate-500";
+                });
+                
+                if (config.infType === 'countdown') {
+                    timerHint.classList.remove('hidden');
+                } else {
+                    timerHint.classList.add('hidden');
+                }
+            } else {
+                infOptions.classList.add('hidden');
+                timerHint.classList.add('hidden');
+            }
 
             const n = config.size * config.size;
             let modeName = "基礎";
             let range = `1 - ${n}`;
+            targetLabel.textContent = "目標";
+            timerLabel.textContent = "計時";
+
             if (config.mode === 'advanced') { modeName = "進階"; range = `1 - ${n * 2}`; }
             if (config.mode === 'reverse') { modeName = "倒序"; range = `${n} - 1`; }
+            if (config.mode === 'infinite') { 
+                modeName = "無限"; 
+                range = config.infType === 'stopwatch' ? "1 - 無限" : `${config.countdownTime}秒挑戰`; 
+                targetLabel.textContent = config.infType === 'stopwatch' ? "目標" : "點擊數";
+                timerLabel.textContent = config.infType === 'stopwatch' ? "用時" : "剩餘時間";
+            }
             
-            modeInfo.textContent = `${config.size}x${config.size} ${modeName}模式 (${range})`;
+            modeInfo.textContent = `${config.size}x${config.size} ${modeName}遊戲 (${range})`;
         }
 
         function initGame() {
             clearInterval(state.timerInterval);
             state.isGameActive = false;
+            state.infiniteCount = 0;
             const n = config.size * config.size;
 
             if (config.mode === 'reverse') {
                 state.nextNumber = n;
                 state.totalTarget = 1;
+                nextTargetDisplay.textContent = state.nextNumber;
             } else if (config.mode === 'advanced') {
                 state.nextNumber = 1;
                 state.totalTarget = n * 2;
+                nextTargetDisplay.textContent = '1';
+            } else if (config.mode === 'infinite') {
+                state.nextNumber = 1;
+                state.totalTarget = 99999;
+                nextTargetDisplay.textContent = config.infType === 'stopwatch' ? '1' : '0';
             } else {
                 state.nextNumber = 1;
                 state.totalTarget = n;
+                nextTargetDisplay.textContent = '1';
             }
 
             state.currentMaxOnGrid = n;
-            timerDisplay.textContent = '0.00s';
-            nextTargetDisplay.textContent = state.nextNumber;
+            
+            if (config.mode === 'infinite' && config.infType === 'countdown') {
+                state.timeLeft = config.countdownTime;
+                timerDisplay.textContent = state.timeLeft.toFixed(2) + 's';
+            } else {
+                timerDisplay.textContent = '0.00s';
+            }
+            
             document.getElementById('result-modal').classList.add('hidden');
 
             grid.style.gridTemplateColumns = `repeat(${config.size}, minmax(0, 1fr))`;
@@ -253,17 +365,35 @@
             const val = parseInt(btn.textContent);
 
             if (val === state.nextNumber) {
-                // 開始計時
                 if (!state.isGameActive) {
                     state.isGameActive = true;
                     state.startTime = Date.now();
-                    state.timerInterval = setInterval(() => {
-                        const elapsed = (Date.now() - state.startTime) / 1000;
-                        timerDisplay.textContent = elapsed.toFixed(2) + 's';
-                    }, 10);
+                    timerHint.classList.add('hidden'); 
+                    
+                    if (config.mode === 'infinite' && config.infType === 'countdown') {
+                        state.timeLeft = config.countdownTime;
+                        state.timerInterval = setInterval(() => {
+                            state.timeLeft -= 0.01;
+                            if (state.timeLeft <= 0) {
+                                state.timeLeft = 0;
+                                timerDisplay.textContent = '0.00s';
+                                endGame();
+                            } else {
+                                timerDisplay.textContent = state.timeLeft.toFixed(2) + 's';
+                            }
+                        }, 10);
+                    } else {
+                        state.timerInterval = setInterval(() => {
+                            const elapsed = (Date.now() - state.startTime) / 1000;
+                            timerDisplay.textContent = elapsed.toFixed(2) + 's';
+                        }, 10);
+                    }
                 }
 
-                if (config.mode === 'advanced' && state.currentMaxOnGrid < state.totalTarget) {
+                const isInfinite = (config.mode === 'infinite');
+                const isAdvanced = (config.mode === 'advanced');
+
+                if ((isAdvanced || isInfinite) && state.currentMaxOnGrid < state.totalTarget) {
                     state.currentMaxOnGrid++;
                     btn.textContent = state.currentMaxOnGrid;
                     btn.classList.remove('updated');
@@ -274,20 +404,25 @@
                     btn.style.pointerEvents = 'none';
                 }
 
-                // 更新下一個目標
-                if (config.mode === 'reverse') {
-                    if (state.nextNumber === state.totalTarget) {
-                        endGame();
-                    } else {
-                        state.nextNumber--;
-                        nextTargetDisplay.textContent = state.nextNumber;
-                    }
+                if (isInfinite && config.infType === 'countdown') {
+                    state.infiniteCount++;
+                    nextTargetDisplay.textContent = state.infiniteCount;
+                    state.nextNumber++;
                 } else {
-                    if (state.nextNumber === state.totalTarget) {
-                        endGame();
+                    if (config.mode === 'reverse') {
+                        if (state.nextNumber === state.totalTarget) {
+                            endGame();
+                        } else {
+                            state.nextNumber--;
+                            nextTargetDisplay.textContent = state.nextNumber;
+                        }
                     } else {
-                        state.nextNumber++;
-                        nextTargetDisplay.textContent = state.nextNumber;
+                        if (state.nextNumber === state.totalTarget) {
+                            endGame();
+                        } else {
+                            state.nextNumber++;
+                            nextTargetDisplay.textContent = state.nextNumber;
+                        }
                     }
                 }
             } else if (state.isGameActive) {
@@ -298,26 +433,34 @@
 
         function endGame() {
             clearInterval(state.timerInterval);
-            const finalTime = timerDisplay.textContent;
-            document.getElementById('final-time').textContent = finalTime;
+            const finalTimeStr = timerDisplay.textContent;
+            const finalScore = config.infType === 'countdown' && config.mode === 'infinite' ? state.infiniteCount : finalTimeStr;
+            
+            document.getElementById('final-time').textContent = finalScore + (typeof finalScore === 'number' ? ' 個' : '');
             document.getElementById('result-detail').textContent = modeInfo.textContent;
             
-            saveToHistory(finalTime, modeInfo.textContent);
+            if (config.mode === 'infinite' && config.infType === 'countdown') {
+                document.getElementById('result-title').textContent = "時間到！";
+                document.getElementById('result-emoji').textContent = "⏱️";
+            } else {
+                document.getElementById('result-title').textContent = "挑戰完成！";
+                document.getElementById('result-emoji').textContent = "🏆";
+            }
+            
+            saveToHistory(finalScore, modeInfo.textContent);
             
             setTimeout(() => document.getElementById('result-modal').classList.remove('hidden'), 300);
         }
 
-        // --- 歷史紀錄邏輯 ---
-        function saveToHistory(time, label) {
+        function saveToHistory(score, label) {
             const history = JSON.parse(localStorage.getItem('schulte_history') || '[]');
             const entry = {
-                time: time,
+                score: score,
                 label: label,
                 date: new Date().toLocaleString('zh-TW', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
             };
             history.unshift(entry);
-            // 只保留最近 10 次
-            localStorage.setItem('schulte_history', JSON.stringify(history.slice(0, 10)));
+            localStorage.setItem('schulte_history', JSON.stringify(history.slice(0, 20)));
         }
 
         function toggleHistory(show) {
@@ -334,19 +477,27 @@
             historyContent.innerHTML = '';
             
             if (history.length === 0) {
-                historyContent.innerHTML = '<p class="text-slate-400 text-sm text-center py-10">尚無練習紀錄</p>';
+                historyContent.innerHTML = '<p class="text-slate-400 text-sm text-center py-10">尚無遊戲紀錄</p>';
                 return;
             }
 
-            history.forEach(item => {
+            history.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = "py-4 border-b border-slate-100 last:border-0";
+                div.className = "py-4 border-b border-slate-100 last:border-0 flex gap-4 items-center";
+                
+                const indexNum = index + 1;
+                
                 div.innerHTML = `
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-tighter">${item.label}</span>
-                        <span class="text-[10px] font-medium text-slate-300">${item.date}</span>
+                    <div class="flex-none w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-400">
+                        #${indexNum}
                     </div>
-                    <div class="text-xl font-black text-slate-900">${item.time}</div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">${item.label}</span>
+                            <span class="text-[9px] font-medium text-slate-300">${item.date}</span>
+                        </div>
+                        <div class="text-xl font-black text-slate-900">${item.score}${typeof item.score === 'number' ? ' 個' : ''}</div>
+                    </div>
                 `;
                 historyContent.appendChild(div);
             });
